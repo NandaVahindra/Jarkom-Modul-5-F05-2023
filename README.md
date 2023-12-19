@@ -316,7 +316,101 @@ iptables -t nat -A POSTROUTING -s 10.54.0.0/20 -o eth0 -j SNAT --to-source $(hos
 Karena tugas NAT melibatkan akses ke jaringan luar, penggunaan tabel yang relevan adalah tabel nat dengan penggunaan sintaks `-t nat`. NAT beroperasi dengan mentranslasikan IP pada topologi ke satu IP yang sama. Oleh karena itu, chain yang diterapkan adalah POSTROUTING, dengan target SNAT dan sumbernya adalah NID Topologi, yaitu `10.54.0.0/20`. Interface Aura yang terkait dengan NAT adalah `eth0`, sehingga menggunakan sintaks -o eth0 dan IP yang digunakan adalah IP yang pertama. IP interface yang digunakan oleh Aura dapat diakses melalui perintah `hostname -I` karena NAT terhubung dengan eth0 itu menggunakan dhcp yang mana IP yang digunakan berubah-ubah, sehingga menggunakan sintaks `--to-source $(hostname -I | awk '{print $1}')`.
 
 Berikut hasil config dengan test diluar dari host Aura:
-![image](https://github.com/NandaVahindra/Jarkom-Modul-5-F05-2023/assets/116022017/e4f359d5-5acf-44e6-9bff-34d158b07c9d)
+![image](https://github.com/NandaVahindra/Jarkom-Modul-5-F05-2023/assets/116022017/e4f359d5-5acf-44e6-9bff-34d158b07c9d)  
+
+## Soal 2
+> Diminta untuk melakukan drop semua TCP dan UDP kecuali port 8080 pada TCP.
+Rule yang digunakan adalah
+```
+iptables -A INPUT -p tcp --dport 8080 -j ACCEPT
+iptables -A INPUT -p tcp -j DROP
+iptables -A INPUT -p udp -j DROP
+```
+Baris pertama membuka akses ke port 8080 untuk koneksi TCP. Baris kedua menolak semua koneksi TCP, sedangkan baris ketiga menolak semua koneksi UDP. Jadi, aturan-aturan ini mengizinkan hanya koneksi TCP ke port 8080 dan menolak semua koneksi TCP dan UDP lainnya. Untuk mencobanya kita bisa menggunakan command ```nmap -p [port] [IP Tujuan]``` dimana ip tujuan adalah tempat rule tersebut ditetapkan
+Contoh: 
+Koneksi port 80 di drop sehingga statenya filtered(akses tidak dapat dipastikan karena paket di block firewall)  
+![image](https://github.com/NandaVahindra/Jarkom-Modul-5-F05-2023/assets/114988957/6cc981d8-14e6-4dad-8c04-7801a41bf011)  
+Sedangkan koneksi port 8080 tidak di drop sehingga statenya closed (terhubung namun tidak ada layanan yang aktif)  
+![image](https://github.com/NandaVahindra/Jarkom-Modul-5-F05-2023/assets/114988957/7584e2de-6e97-4753-b81f-b0329892e37d)  
+
+## Soal 3
+> Batasi DHCP dan DNS Server hanya dapat dilakukan ping oleh maksimal 3 device secara bersamaan, selebihnya akan di drop.
+Aturan yang dapat digunakan adalah
+```
+iptables -A INPUT -p icmp -m connlimit --connlimit-above 3 --connlimit-mask 0 -j DROP
+```
+Perintah iptables di atas bertujuan mengontrol koneksi ICMP (ping) dengan membatasi jumlah koneksi simultan. Berikut adalah rinciannya:  
+
+- `iptables -A INPUT`: Menambahkan aturan ke chain INPUT.  
+- `-p icmp`: Menetapkan protokol sebagai ICMP (ping).  
+- `-m connlimit --connlimit-above 3 --connlimit-mask 0`: Menggunakan modul connlimit untuk membatasi jumlah koneksi. Aturan ini menolak paket jika koneksi ICMP melebihi 3, tanpa mempertimbangkan bit alamat IP (```--connlimit-above 3``` menunjukkan batasan ini, dan ```--connlimit-mask 0``` mengabaikan bit alamat IP).  
+- `-j DROP`: Menolak (DROP) paket jika aturan terpenuhi.  
+Dengan demikian, aturan ini memblokir paket ICMP jika jumlah koneksi ICMP simultan melebihi 3.  
+Testing:  
+![image](https://github.com/NandaVahindra/Jarkom-Modul-5-F05-2023/assets/114988957/9f04ea0d-6c74-4b94-bfdd-748d607efdfd)  
+Koneksi device ke 4 di drop sehingga tidak bisa melakukan ping
+
+## Soal 4
+> Lakukan pembatasan sehingga koneksi SSH pada Web Server hanya dapat dilakukan oleh masyarakat yang berada pada GrobeForest.
+Aturan yang digunakan adalah
+```
+iptables -A INPUT -p tcp --dport 22 -m iprange --src-range 10.54.4.3-10.54.7.254 -j ACCEPT
+iptables -A INPUT -p tcp --dport 22 -j DROP
+```
+- `-A INPUT`: Menambahkan aturan ke rantai INPUT (penerimaan paket masuk).  
+- `-p tcp`: Menentukan protokol yang digunakan (dalam hal ini, TCP).
+- `--dport 22`: Mengatur port tujuan ke 22. Ini berarti aturan ini hanya akan berlaku untuk paket yang menuju ke port 22 (biasanya digunakan untuk SSH).
+- `-m iprange --src-range 10.54.4.3-10.54.7.254`: Menggunakan modul iprange untuk membatasi paket yang berasal dari rentang alamat IP antara 10.54.4.3 hingga 10.54.7.254.
+- `-j ACCEPT`: Menentukan tindakan yang diambil jika paket memenuhi semua kondisi di atas, yaitu menerima (ACCEPT) paket tersebut.
+- `-j DROP`: Menentukan tindakan yang diambil jika paket memenuhi kondisi di atas, yaitu menolak (DROP) paket tersebut.  
+Aturan ini membatasi akses SSH hanya untuk alamat IP dalam rentang 10.54.4.3 hingga 10.54.7.254, sementara koneksi dari alamat IP lainnya akan ditolak. Untuk mecobanya kita dapat melakukan telnet pada ip webserver dengan port 22.  
+![image](https://github.com/NandaVahindra/Jarkom-Modul-5-F05-2023/assets/114988957/7dc7a523-6556-47b8-af72-0f6223988dc7)  
+Telnet port 22 dari GrobeForest terhubung.  
+![image](https://github.com/NandaVahindra/Jarkom-Modul-5-F05-2023/assets/114988957/d8b53127-544d-42bb-b9d9-5d9eae722a6e)  
+Telnet port 22 dari TurkRegion tidak dapat terhubung.  
+
+## Soal 5
+> Akses menuju WebServer hanya diperbolehkan saat jam kerja yaitu Senin-Jumat pada pukul 08.00-16.00.
+Aturan yang digunakan adalah
+```
+iptables -A INPUT -m time --weekdays Mon,Tue,Wed,Thu,Fri --timestart 08:00 --timestop 16:00 -j ACCEPT
+iptables -A INPUT -j DROP
+```
+- `-A INPUT`: Menambahkan aturan ke rantai INPUT.
+- `-m time --weekdays Mon,Tue,Wed,Thu,Fri`: Menggunakan modul waktu untuk mengatur hari-hari di mana aturan ini berlaku (Senin sampai Jumat).
+- `--timestart 08:00`: Menentukan waktu mulai aturan (08:00 atau 8 pagi).
+- `--timestop 16:00`: Menentukan waktu berakhir aturan (16:00 atau 4 sore).
+- `-j ACCEPT`: Menentukan tindakan yang diambil jika paket memenuhi semua kondisi di atas, yaitu menerima (ACCEPT) paket tersebut.
+- `-j DROP`: Menentukan tindakan yang diambil jika paket tidak memenuhi aturan sebelumnya, yaitu menolak (DROP) paket tersebut.
+Dengan aturan ini, akses ke sistem hanya diizinkan pada hari kerja (Senin hingga Jumat) dan pada rentang waktu 08:00 hingga 16:00. Koneksi dari waktu atau hari lainnya akan ditolak. Untuk mencobanya kita bisa melakukan ping ke ip dimana aturan tersebut ditetapkan.
+Testing:  
+Saat Jam Kerja ping berhasil dilakukan.  
+![image](https://github.com/NandaVahindra/Jarkom-Modul-5-F05-2023/assets/114988957/267e7bb7-6df0-4bbc-b42e-99b69c8d0ec0)  
+Diluar jam kerja ping tidak berhasil.  
+![image](https://github.com/NandaVahindra/Jarkom-Modul-5-F05-2023/assets/114988957/85c40c91-1c00-4e5b-99c4-5c89019a9b36)  
+Saat jam kerja diluar hari senin - jumat ping tidak berhasil.  
+![image](https://github.com/NandaVahindra/Jarkom-Modul-5-F05-2023/assets/114988957/636d4e98-bca7-448a-b2d3-700ce0bbd703)  
+
+## Soal 6
+> Aturan iptables diperbarui untuk memblokir akses ke WebServer pada hari Senin hingga Kamis antara pukul 12:00-13:00 dan pada hari Jumat antara pukul 11:00-13:00, karena network administrator sedang istirahat atau sedang melaksanakan salat Jumat.
+Aturan yang digunakan adalah
+```
+iptables -A INPUT -m time --weekdays Mon,Tue,Wed,Thu --timestart 12:00 --timestop 13:00 -j DROP
+iptables -A INPUT -m time --weekdays Fri --timestart 11:00 --timestop 13:00 -j DROP
+iptables -A INPUT -m time --weekdays Mon,Tue,Wed,Thu,Fri --timestart 08:00 --timestop 16:00 -j ACCEPT
+iptables -A INPUT -j DROP
+```
+- `-A INPUT`: Menambahkan aturan ke rantai INPUT.
+- `-m time --weekdays Mon,Tue,Wed,Thu`: Menggunakan modul waktu untuk mengatur hari-hari di mana aturan ini berlaku (Senin sampai Kamis).
+- `--timestart 12:00`: Menentukan waktu mulai aturan (12:00 atau 12 siang).
+- `--timestop 13:00`: Menentukan waktu berakhir aturan (13:00 atau 1 sore).
+- `-j DROP`: Menentukan tindakan yang diambil jika paket memenuhi semua kondisi di atas, yaitu menolak (DROP) paket tersebut.
+Dengan aturan ini, akses ke WebServer diatur agar tidak dapat dilakukan pada waktu istirahat (Senin-Kamis 12:00-13:00) dan waktu salat Jumat (Jumat 11:00-13:00), sementara diizinkan pada jam kerja (Senin-Jumat 08:00-16:00).  
+Testing  
+Senin-Kamis 12:00-13:00  
+![image](https://github.com/NandaVahindra/Jarkom-Modul-5-F05-2023/assets/114988957/ffa5e9dd-5ee9-46b5-8ad6-1afa6e191ec7)  
+Jumat 11:00-13:00  
+![image](https://github.com/NandaVahindra/Jarkom-Modul-5-F05-2023/assets/114988957/90825452-3272-42e6-95cf-d8992d972d42)  
 
 ## Soal 7
 > Karena terdapat 2 WebServer, kalian diminta agar setiap client yang mengakses Sein dengan Port 80 akan didistribusikan secara bergantian pada Sein dan Stark secara berurutan dan request dari client yang mengakses Stark dengan port 443 akan didistribusikan secara bergantian pada Sein dan Stark secara berurutan.
